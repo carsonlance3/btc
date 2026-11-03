@@ -1009,7 +1009,7 @@ if (window.claude && window.claude.use) window.claude.use("db").then(function (d
 var CDC = "https://api.crypto.com/exchange/v1/public/";
 function jget(u) { return fetch(u, { cache: "no-store" }).then(function (r) { if (!r.ok) throw { code: "upstream_error", message: "HTTP " + r.status }; return r.json(); }); }
 function iso(ms) { return new Date(Number(ms)).toISOString(); }
-var directMcp = {
+var cdcTool = {
 callTool: function (server, tool, input) {
 var t = String(tool).toLowerCase(), inst = (input && input.instrument_name) || "BTC_USDT";
 if (t === "get_ticker") return jget(CDC + "get-ticker?instrument_name=" + inst).then(function (j) { var d = j.result.data[0]; return { payload: { last: String(d.a) } }; });
@@ -1048,6 +1048,38 @@ compute();
 }
 var lastKW = wStart(Date.now());
 setInterval(function () { if (wStart(Date.now()) !== lastKW) { lastKW = wStart(Date.now()); kStrike = false; if (!kalshiTyped.yes) $("yes").value = ""; if (!kalshiTyped.no) $("no").value = ""; } }, 1000);
+// Fallback when Crypto.com cannot be reached from this browser: Coinbase's public USD market data.
+var CB = "https://api.exchange.coinbase.com/products/BTC-USD/";
+var cbTool = {
+  callTool: function (server, tool, input) {
+    var t = String(tool).toLowerCase();
+    if (t === "get_ticker" || t === "get_index_price") return jget(CB + "ticker").then(function (j) { return { payload: t === "get_ticker" ? { last: String(j.price) } : { instrument_name: "BTCUSD-INDEX", price: String(j.price) } }; });
+    if (t === "get_candlestick") return jget(CB + "candles?granularity=" + ((input && input.timeframe) === "15m" ? 900 : 60)).then(function (a) {
+      return { payload: { data: a.slice(0, 50).map(function (c) { return { open: String(c[3]), high: String(c[2]), low: String(c[1]), close: String(c[4]), volume: String(c[5]), timestamp: iso(c[0] * 1000) }; }) } };
+    });
+    if (t === "get_book") return jget(CB + "book?level=2").then(function (j) {
+      var f = function (a) { return a.slice(0, 20).map(function (x) { return { price: String(x[0]), qty: String(x[1]) }; }); };
+      return { payload: { bids: f(j.bids), asks: f(j.asks) } };
+    });
+    if (t === "get_trades") return jget(CB + "trades?limit=100").then(function (a) {
+      return { payload: { data: a.map(function (x) { return { price: String(x.price), qty: String(x.size), side: x.side === "buy" ? "sell" : "buy", timestamp: new Date(x.time).toISOString() }; }) } };
+    });
+    if (t === "get-global-market") return cdcTool.callTool(server, tool, input);
+    return Promise.reject({ code: "tool_error", message: "not available in website mode" });
+  }
+};
+var useCb = false;
+var directMcp = {
+  callTool: function (server, tool, input) {
+    if (server === "CoinGecko" || !useCb) {
+      return cdcTool.callTool(server, tool, input).catch(function (e) {
+        if (server === "CoinGecko") throw e;
+        useCb = true; return cbTool.callTool(server, tool, input);
+      });
+    }
+    return cbTool.callTool(server, tool, input);
+  }
+};
 var useP = Promise.resolve(directMcp);
 useP.then(function (m) {
 mcp = m;
