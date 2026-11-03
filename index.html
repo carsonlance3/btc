@@ -1,0 +1,1064 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="light dark">
+<title>BTC 15-Minute Edge Check</title>
+
+<style>
+/* Layout: one narrow phone column. Live price and countdown, Kalshi inputs, prediction and result, automatic model check, then the paper log. */
+:root{--bg:#f2f5f3;--surface:#fff;--fg:#13201b;--muted:#58675f;--line:#d3dbd7;--accent:#0b7a5c;--chip:#e5ebe8;--loss:#b42318;--warn:#9a5b00;--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1412;--surface:#161e1b;--fg:#e5eeea;--muted:#93a39c;--line:#28332f;--accent:#3ccf9e;--chip:#202b27;--loss:#ff8a7a;--warn:#f0b35a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e1412;--surface:#161e1b;--fg:#e5eeea;--muted:#93a39c;--line:#28332f;--accent:#3ccf9e;--chip:#202b27;--loss:#ff8a7a;--warn:#f0b35a;color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:30rem;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font-size:1.5rem;line-height:1.15;margin:0;text-wrap:balance}
+h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 12px;font-weight:600}
+.sub,.note,.foot{color:var(--muted);margin:6px 0 0;font-size:.85rem}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.live{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.price{font-size:2.3rem;font-weight:700;letter-spacing:-.02em}
+.clock{font-size:1.4rem;font-weight:600}
+.row{display:flex;justify-content:space-between;gap:12px;margin-top:10px;color:var(--muted);font-size:.85rem;flex-wrap:wrap}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-right:6px}
+.dot.on{background:var(--accent)}.dot.bad{background:var(--loss)}
+.alert{border-left:4px solid var(--warn);background:var(--chip);border-radius:8px;padding:10px 12px;margin-top:12px;font-size:.88rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.wide{grid-column:1/-1}
+label{font-size:.8rem;color:var(--muted);font-weight:500}
+select{width:100%;min-height:46px;padding:8px 10px;font:500 16px var(--mono);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px}
+select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input{width:100%;min-height:46px;padding:8px 10px;font:500 16px var(--mono);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px}
+input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.check{flex-direction:row;align-items:center;gap:10px}
+.check input{width:22px;min-height:22px;height:22px;padding:0;accent-color:var(--accent)}
+.check label{font-size:.9rem;color:var(--fg)}
+.verdict{border-radius:8px;padding:12px 14px;background:var(--chip);margin:12px 0}
+.verdict strong{display:block;font-size:1.05rem}
+.verdict span{color:var(--muted);font-size:.85rem}
+.verdict.good{border-left:4px solid var(--accent)}.verdict.none{border-left:4px solid var(--warn)}
+.pred{background:var(--bg);border-radius:8px;padding:14px;margin-bottom:14px;--c:var(--warn)}
+.pred.up{--c:var(--accent)}.pred.down{--c:var(--loss)}
+.pred .k,.max .k,.stat .k{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.pred .call{font-size:1.7rem;font-weight:700;color:var(--c);margin:2px 0 10px}
+.pred .bar{height:8px;background:var(--chip);border-radius:4px;overflow:hidden}
+.pred .bar i{display:block;height:100%;background:var(--c)}
+.pred .split{display:flex;justify-content:space-between;margin-top:6px;font-size:.9rem;font-weight:600}
+.pred .trend{margin-top:10px;font-size:.78rem;color:var(--muted);line-height:1.5}
+.caution{color:var(--warn);font-size:.82rem;margin:0 0 8px;font-weight:600}
+.big{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.big .num{font-size:2.4rem;font-weight:700}
+.max{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.max div{background:var(--bg);border-radius:8px;padding:10px}
+.max .v{font-size:1.15rem;font-weight:600;margin-top:2px}
+.side{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:12px 0;border-top:1px solid var(--line);align-items:center}
+.side .meta{grid-column:1;color:var(--muted);font-size:.82rem}
+.side .edge{grid-row:1;grid-column:2;font-weight:600;font-size:1.05rem}
+.side button{grid-column:2;justify-self:end}
+.pos{color:var(--accent)}.neg{color:var(--loss)}
+button{font:600 .9rem system-ui,sans-serif;min-height:44px;padding:8px 14px;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+button.danger{color:var(--loss)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.stat{background:var(--bg);border-radius:8px;padding:10px;min-width:0}
+.stat .v{font-size:1.15rem;font-weight:600;margin-top:2px}
+.warnline{font-size:.82rem;color:var(--warn);margin:0 0 12px}
+ul.log{list-style:none;margin:0;padding:0}
+ul.log li{display:grid;grid-template-columns:1fr auto;gap:6px 10px;padding:12px 0;border-top:1px solid var(--line);align-items:center}
+.sm{color:var(--muted);font-size:.8rem}
+.actions{display:flex;justify-content:flex-end;margin-top:12px}
+.tbl{display:grid;gap:6px 8px;font-size:.82rem;margin:8px 0 12px;overflow-x:auto}
+.tbl.c4{grid-template-columns:1.4fr 1fr 1fr .6fr}
+.tbl.c5{grid-template-columns:1.3fr .6fr .6fr .8fr 1fr}
+.tbl.c4b{grid-template-columns:1.2fr .6fr 1fr 1fr}
+.chart{width:100%;height:auto;display:block}
+.chart text{fill:var(--muted);font:10px var(--mono)}
+.hnote{font-size:.82rem;color:var(--muted);margin:10px 0 0;line-height:1.5}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.chip2{min-width:34px;text-align:center;padding:4px 6px;border-radius:6px;background:var(--bg);font:600 .78rem var(--mono)}
+.chip2.w{color:var(--accent)}.chip2.l{color:var(--loss)}.chip2.p{color:var(--muted)}
+.news{list-style:none;margin:8px 0 0;padding:0}
+.news li{padding:8px 0;border-top:1px solid var(--line);font-size:.88rem}
+.news a{color:var(--fg)}
+.news .src{color:var(--muted);font-size:.75rem;font-family:var(--mono)}
+.chip{display:inline-block;padding:3px 10px;border-radius:999px;background:var(--chip);font-weight:600;font-size:.85rem}
+@keyframes flash{from{box-shadow:0 0 0 4px var(--c)}to{box-shadow:0 0 0 0 transparent}}
+.pred.flash{animation:flash 1.8s ease-out 1}
+@media (prefers-reduced-motion:reduce){.pred.flash{animation:none}}
+.tbl .h{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em}
+</style>
+</head><body>
+
+
+<main class="wrap">
+<header>
+<h1>BTC 15-Minute Edge Check</h1>
+<p class="sub">Reads live Bitcoin by itself. You only type in the Kalshi prices.</p>
+</header>
+
+<section class="panel" aria-label="Live Bitcoin">
+<div class="live">
+<div class="price mono" id="price">&mdash;</div>
+<div class="clock mono" id="clock">--:--</div>
+</div>
+<div class="row">
+<span><i class="dot" id="dot"></i><span id="status">Connecting&hellip;</span></span>
+<span>left in this 15-min window</span>
+</div>
+<div class="row"><span>1-min move: <b class="mono" id="volshow">&mdash;</b></span><span>Window opened at <b class="mono" id="openshow">&mdash;</b></span></div>
+<p class="note" id="basisnote" hidden></p>
+<div class="alert" id="alert" hidden></div>
+</section>
+
+<section class="panel" aria-live="polite" aria-label="Timed call">
+<h2 id="callh">Call</h2>
+<div id="call"></div>
+</section>
+
+<section class="panel" aria-label="Scorecard">
+<h2 id="scoreh">Scorecard</h2>
+<div id="score"></div>
+<p class="hnote mono" id="dbstat" style="margin:6px 0 0"></p>
+</section>
+
+<section class="panel" aria-label="Chart">
+<h2>Bitcoin, last 50 minutes</h2>
+<div id="chart"><p class="note">Waiting for candles.</p></div>
+</section>
+
+<section class="panel" aria-label="Inputs">
+<h2>From Kalshi</h2>
+<div class="grid">
+<div class="field wide" id="manualwrap" hidden>
+<label for="manual">Bitcoin price ($). Live feed is off, type it in</label>
+<input id="manual" inputmode="decimal" placeholder="e.g. 80700">
+</div>
+<div class="field wide">
+<label for="know">Kalshi&rsquo;s current price ($). Optional, type it to match the page to Kalshi</label>
+<input id="know" inputmode="decimal" placeholder="e.g. 80931.05">
+<p class="note" id="adjnote" hidden style="margin:2px 0 0"></p>
+</div>
+<div class="field wide">
+<label for="strike">Price to beat ($). Auto-filled, replace with Kalshi&rsquo;s number</label>
+<input id="strike" inputmode="decimal" placeholder="auto"><p class="note" id="kstatus" style="margin:2px 0 0">Looking for the Kalshi market&hellip;</p>
+</div>
+<div class="field"><label for="yes">YES ask (%)</label><input id="yes" inputmode="decimal" placeholder="e.g. 62"></div>
+<div class="field"><label for="no">NO ask (%)</label><input id="no" inputmode="decimal" placeholder="e.g. 41"></div>
+<div class="field wide"><label for="callsec">Time of the call, into each 15-minute window</label>
+<select id="callsec"><option value="10">0:10 opening guess (from the last 15 min)</option><option value="150">2:30</option><option value="300">5:00</option><option value="450">7:30</option><option value="600">10:00</option><option value="720">12:00 (latest)</option></select>
+<p class="note" style="margin:2px 0 0">Later calls are more decisive, but the market has priced more in by then. The page records a call at every one of these times, so the scorecard shows which has done best.</p></div>
+<div class="field wide check"><input id="usetrend" type="checkbox" checked><label for="usetrend">Use trend signal (last 5 candles and volume)</label></div>
+<div class="field wide check"><input id="useflow" type="checkbox" checked><label for="useflow">Use order-flow signal (order book and recent trades)</label></div>
+<div class="field wide check"><input id="usenews" type="checkbox" checked><label for="usenews">Use news mood (tiny effect)</label></div>
+<div class="field wide check"><input id="usesound" type="checkbox"><label for="usesound">Beep at the time chosen above (tap to turn on, keep the page open)</label></div>
+<div class="field"><label for="tret">Target return (%) after fees</label><input id="tret" inputmode="decimal" value="15"></div>
+<div class="field"><label for="bank">Paper bankroll ($)</label><input id="bank" inputmode="decimal" value="100"></div>
+<div class="field wide"><label for="minedge">Only flag an edge of at least (points, after fees)</label><input id="minedge" inputmode="decimal" value="3"></div>
+</div>
+<p class="note">Assumes windows end at :00, :15, :30 and :45 of every hour. Like Kalshi, the price to beat is the average price over the minute before the window opened, when this page was open then. The price is Crypto.com&rsquo;s USD index. Kalshi settles on its own index, which can still differ by a few dollars, so type Kalshi&rsquo;s price to beat when you can.</p>
+</section>
+
+<section class="panel" aria-live="polite" aria-label="Result">
+<h2>Result</h2>
+<section class="panel" aria-label="Payout" id="payout"></section>
+<div id="result"><p class="note">Waiting for the first Bitcoin price.</p></div>
+</section>
+
+<section class="panel" aria-label="News and market">
+<h2>News and market</h2>
+<div id="ctx"><p class="note">Loading news&hellip;</p></div>
+</section>
+
+<section class="panel" aria-label="History">
+<h2>Past windows</h2>
+<div id="hist"><p class="note">Loading past windows&hellip;</p></div>
+</section>
+
+<section class="panel" aria-label="Model check">
+<h2>Model check (automatic)</h2>
+<div id="check"></div>
+</section>
+
+<section class="panel" aria-label="Paper trades">
+<h2>Paper trades (no real money)</h2>
+<div id="summary"></div>
+<ul class="log" id="log"></ul>
+<div class="actions"><button class="danger" id="clear" type="button">Clear log</button></div>
+</section>
+
+<p class="foot">An estimate from a simple volatility model, not advice. Fees are approximate. Prediction markets can lose you the whole stake. Your logs stay in this browser.</p>
+</main>
+
+<script>
+(function () {
+var $ = function (id) { return document.getElementById(id); };
+var SERVER = "Crypto.com", INSTR = "BTC_USDT", KEY = "btc15-live-log-v1", PKEY = "btc15-preds-v1", WKEY = "btc15-wins-v1";
+var mcp = null;
+var names = {
+ticker: ["get_ticker", "Get_ticker"], candle: ["get_candlestick", "Get_candlestick"],
+book: ["get_book", "Get_book"], trades: ["get_trades", "Get_trades"], index: ["get_index_price", "Get_index_price"]
+};
+var idxBuf = [], adj = 0, adjAt = 0, basis = null, openRaw = null, spot = null, vol = null, volHour = null, vol15 = null, openPx = null, openTs = null, lastOk = 0, errCode = null;
+var closes = {}, strikeEdited = false, busyT = false, busyC = false, busyF = false, candles = [];
+var flow = null, flowHist = [];
+var LOG = [], PRED = [], WINS = [], lastWinSeen = null, busyW = false;
+var news = [], mood = null, moodAt = 0, glob = null, ctxErr = null, busyN = false, snd = null;
+try { LOG = JSON.parse(localStorage.getItem(KEY) || "[]"); if (!Array.isArray(LOG)) LOG = []; } catch (e) { LOG = []; }
+try { PRED = JSON.parse(localStorage.getItem(PKEY) || "[]"); if (!Array.isArray(PRED)) PRED = []; } catch (e) { PRED = []; }
+try { WINS = JSON.parse(localStorage.getItem(WKEY) || "[]"); if (!Array.isArray(WINS)) WINS = []; } catch (e) { WINS = []; }
+function persistWins() { try { localStorage.setItem(WKEY, JSON.stringify(WINS.slice(-300))); } catch (e) {} dbSchedule(); }
+function persist() { try { localStorage.setItem(KEY, JSON.stringify(LOG)); } catch (e) {} }
+function persistPred() { try { localStorage.setItem(PKEY, JSON.stringify(PRED.slice(-400))); } catch (e) {} dbSchedule(); }
+
+function erf(x){var s=x<0?-1:1;x=Math.abs(x);var t=1/(1+0.3275911*x);var y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return s*y;}
+function cdf(z){return 0.5*(1+erf(z/Math.SQRT2));}
+function fee(p){return Math.ceil(0.07*p*(1-p)*100-1e-9)/100;}
+function num(id){var v=parseFloat(String($(id).value).replace(/,/g,""));return isFinite(v)?v:NaN;}
+function money(x){return (x<0?"−":"+")+"$"+Math.abs(x).toFixed(2);}
+function pts(x){return (x<0?"−":"+")+Math.abs(x*100).toFixed(1)+" pts";}
+function usd(x){return "$"+x.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});}
+function wStart(now){return Math.floor(now/900000)*900000;}
+function minsLeft(){return (wStart(Date.now())+900000-Date.now())/60000;}
+// The optional "Kalshi's current price" box shifts the whole feed by the gap you measured, for 30 minutes.
+function curAdj() { return (adj && Date.now() - adjAt < 1800000) ? adj : 0; }
+function spotNow(){return spot!==null?spot+curAdj():(num("manual")>0?num("manual"):null);}
+function sd(a){var m=a.reduce(function(x,y){return x+y;},0)/a.length;return Math.sqrt(a.reduce(function(x,y){return x+(y-m)*(y-m);},0)/a.length);}
+
+// Kalshi's target is the average of its index over the 60 seconds before the window opens, and the
+// final value is the same average before it closes. Mirror that with our own USD index readings when we have them.
+function avgIdx(a, b) {
+var g = idxBuf.filter(function (x) { return x.t >= a && x.t <= b; });
+return g.length >= 6 ? g.reduce(function (s, x) { return s + x.v; }, 0) / g.length : null;
+}
+function syncOpen() {
+var r = openTs !== null ? avgIdx(openTs - 60000, openTs) : null;
+openPx = r !== null ? r + curAdj() : (openRaw === null ? null : openRaw - (basis || 0) + curAdj());
+}
+function closeAt(t) { var v = closes[t]; return v === undefined ? NaN : v - (basis || 0) + curAdj(); }
+function finalAt(end) {
+var r = avgIdx(end - 60000, end);
+return r !== null ? r + curAdj() : closeAt(end - 60000);
+}
+function updAdj() {
+var n = $("adjnote"), a = curAdj();
+if (!a) { n.hidden = true; return; }
+n.hidden = false;
+n.textContent = "Matching Kalshi: the feed is shifted by " + (a >= 0 ? "+" : "−") + "$" + Math.abs(a).toFixed(2) + ". Re-enter Kalshi’s price every few minutes.";
+}
+function unwrap(res){
+var p = res && res.payload;
+if (typeof p === "string") { try { p = JSON.parse(p); } catch (e) {} }
+if (p && p.result) p = p.result;
+return p;
+}
+// Try the lower-case tool name first, then the capitalised one the directory lists; remember whichever works.
+function callNamed(kind, input) {
+var list = names[kind].slice();
+function attempt(i) {
+return mcp.callTool(SERVER, list[i], input, { cache: false }).then(function (r) {
+names[kind] = [list[i]];
+return r;
+}, function (err) {
+if (i + 1 < list.length && err && (err.code === "tool_error" || err.code === "not_in_manifest" || err.code === "bad_request")) return attempt(i + 1);
+throw err;
+});
+}
+return attempt(0);
+}
+
+function fail(err) { errCode = (err && err.code) || "upstream_error"; renderStatus(); }
+function renderStatus() {
+var msg = null;
+switch (errCode) {
+case "server_not_connected": msg = "Crypto.com is not connected. Add it in claude.ai Settings, then Connectors."; break;
+case "needs_reauth": msg = "Crypto.com needs to be reconnected in claude.ai Settings, then Connectors."; break;
+case "not_in_manifest": case "consent_required": msg = "This page was not allowed to use Crypto.com. Reopen the page and allow it when asked."; break;
+case "approval_required": msg = "Approval is needed to read Crypto.com prices. Reopen the page and allow it."; break;
+case "not_granted": case "capability_disabled": case "capability_removed": msg = "Live prices are not available in this view. Open the page in claude.ai."; break;
+case "blocked_by_policy": msg = "Your organization blocks the Crypto.com connector."; break;
+case "selection_required": msg = "You have more than one Crypto.com connector. Choose one when asked."; break;
+case null: break;
+default: msg = "Could not reach Crypto.com just now. Retrying."; break;
+}
+var a = $("alert");
+a.hidden = !msg; a.textContent = msg || "";
+var hard = ["server_not_connected","needs_reauth","not_in_manifest","consent_required","approval_required","not_granted","capability_disabled","capability_removed","blocked_by_policy","selection_required"].indexOf(errCode) >= 0;
+$("manualwrap").hidden = !(hard || (mcp === null));
+}
+
+// Kalshi settles on a USD index, but Crypto.com's BTC/USDT trades a little away from USD.
+// So the page reads the USD index price and tracks the gap, then uses the gap to put candle prices on the same footing.
+function loadTicker() {
+if (!mcp || busyT) return; busyT = true;
+Promise.all([
+callNamed("ticker", { instrument_name: INSTR }),
+callNamed("index", { instrument_name: "BTCUSD-INDEX" }).then(function (r) { return r; }, function () { return null; })
+]).then(function (rs) {
+busyT = false;
+var p = unwrap(rs[0]);
+var last = parseFloat(p && (p.last || (p.data && p.data[0] && p.data[0].a)));
+var ip = rs[1] ? unwrap(rs[1]) : null;
+var idx = parseFloat(ip && ip.price);
+if (!isFinite(last)) return;
+if (isFinite(idx)) { var raw = last - idx; basis = basis === null ? raw : 0.9 * basis + 0.1 * raw; spot = idx; idxBuf.push({ t: Date.now(), v: idx }); if (idxBuf.length > 500) idxBuf.shift(); }
+else spot = last - (basis || 0);
+syncOpen();
+var bn = $("basisnote");
+if (basis !== null) { bn.hidden = false; bn.textContent = "Crypto.com BTC/USDT trades " + usd(Math.abs(basis)) + (basis >= 0 ? " above" : " below") + " the USD price. The page uses the USD index and corrects for the gap."; }
+else { bn.hidden = false; bn.textContent = "USD index not available, showing BTC/USDT, which can differ from Kalshi."; }
+lastOk = Date.now(); errCode = null; renderStatus(); compute(); recordPreds();
+}, function (e) { busyT = false; fail(e); });
+}
+
+function loadCandles() {
+if (!mcp || busyC) return; busyC = true;
+callNamed("candle", { instrument_name: INSTR, timeframe: "1m" }).then(function (r) {
+busyC = false;
+var p = unwrap(r), arr = (p && p.data) || [];
+var rows = arr.map(function (c) { return { t: Date.parse(c.timestamp), o: parseFloat(c.open), c: parseFloat(c.close), v: parseFloat(c.volume) }; })
+.filter(function (c) { return isFinite(c.t) && isFinite(c.c); }).sort(function (a, b) { return a.t - b.t; });
+if (rows.length < 6) return;
+candles = rows;
+var rets = [];
+for (var i = 1; i < rows.length; i++) rets.push(Math.log(rows[i].c / rows[i - 1].c));
+// Blend the last 15 minutes with the whole hour so a recent calm or burst counts for more.
+volHour = Math.max(sd(rets), 1e-5);
+vol15 = Math.max(sd(rets.slice(-15)), 1e-5);
+vol = Math.sqrt(0.6 * vol15 * vol15 + 0.4 * volHour * volHour);
+rows.forEach(function (c) { closes[c.t] = c.c; });
+var ws = wStart(Date.now());
+for (var j = 0; j < rows.length; j++) if (rows[j].t === ws) { openRaw = rows[j].o; openTs = ws; }
+syncOpen();
+errCode = null; renderStatus(); compute(); settleLog(); settlePreds();
+}, function (e) { busyC = false; fail(e); });
+}
+
+// Past 15-minute windows. Crypto.com returns the last 50 at a time, so we save them and the list grows toward 100.
+function loadWins() {
+if (!mcp || busyW) return; busyW = true;
+callNamed("candle", { instrument_name: INSTR, timeframe: "15m" }).then(function (r) {
+busyW = false;
+var p = unwrap(r), arr = (p && p.data) || [];
+var have = {};
+WINS.forEach(function (w) { have[w.t] = true; });
+arr.forEach(function (c) {
+var t = Date.parse(c.timestamp), o = parseFloat(c.open), cl = parseFloat(c.close);
+if (!isFinite(t) || !isFinite(o) || !isFinite(cl)) return;
+if (t + 900000 > Date.now()) return;
+if (!have[t]) { WINS.push({ t: t, o: o, c: cl }); have[t] = true; }
+});
+WINS.sort(function (a, b) { return a.t - b.t; });
+persistWins(); renderHist();
+}, function () { busyW = false; });
+}
+
+function renderHist() {
+var el = $("hist");
+var done = WINS.filter(function (w) { return w.t + 900000 <= Date.now(); }).slice(-100);
+if (done.length < 5) { el.innerHTML = '<p class="note">Loading past windows&hellip;</p>'; return; }
+var up = done.map(function (w) { return w.c >= w.o ? 1 : 0; });
+var mv = done.map(function (w) { return Math.abs(w.c - w.o); });
+var n = done.length, rises = up.reduce(function (a, b) { return a + b; }, 0);
+var avg = mv.reduce(function (a, b) { return a + b; }, 0) / n, mx = Math.max.apply(null, mv) || 1;
+var cur = 1, longest = 1;
+for (var i = up.length - 2; i >= 0 && up[i] === up[up.length - 1]; i--) cur++;
+var run = 1;
+for (var j = 1; j < n; j++) { run = up[j] === up[j - 1] ? run + 1 : 1; if (run > longest) longest = run; }
+var au = 0, aun = 0, ad = 0, adn = 0;
+for (var k = 1; k < n; k++) { if (up[k - 1] === 1) { aun++; au += up[k]; } else { adn++; ad += up[k]; } }
+var W = 300, H = 72, bw = W / n, bars = "";
+done.forEach(function (w, idx) {
+var h = Math.max(1, mv[idx] / mx * (H / 2 - 3)), x = (idx * bw).toFixed(2), wd = Math.max(1, bw - 1).toFixed(2);
+bars += up[idx] ? '<rect x="' + x + '" y="' + (H / 2 - h).toFixed(1) + '" width="' + wd + '" height="' + h.toFixed(1) + '" style="fill:var(--accent)"/>'
+: '<rect x="' + x + '" y="' + (H / 2) + '" width="' + wd + '" height="' + h.toFixed(1) + '" style="fill:var(--loss)"/>';
+});
+var svg = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Rise and drop for each of the last ' + n + ' fifteen-minute windows"><line x1="0" y1="' + (H / 2) + '" x2="' + W + '" y2="' + (H / 2) + '" style="stroke:var(--line)" stroke-width="1"/>' + bars + '</svg>';
+var pu = aun ? Math.round(au / aun * 100) : null, pd = adn ? Math.round(ad / adn * 100) : null;
+var pattern = (pu !== null && pd !== null && Math.abs(pu - 50) < 12 && Math.abs(pd - 50) < 12)
+? "Both are close to 50%, so what the last window did tells you little about the next one."
+: "A gap this size can still be chance with this few windows. Check it again as more windows save.";
+el.innerHTML = svg +
+'<div class="stats" style="margin-top:10px"><div class="stat"><div class="k">Windows</div><div class="v mono">' + n + '</div></div><div class="stat"><div class="k">Rose</div><div class="v mono">' + Math.round(rises / n * 100) + '%</div></div><div class="stat"><div class="k">Avg move</div><div class="v mono">$' + avg.toFixed(0) + '</div></div></div>' +
+'<p class="hnote mono">After a rise, the next window rose ' + (pu === null ? "n/a" : pu + "%") + ' (' + aun + ' times)<br>After a drop, the next window rose ' + (pd === null ? "n/a" : pd + "%") + ' (' + adn + ' times)<br>Streak now: ' + cur + ' ' + (up[up.length - 1] ? "rises" : "drops") + ' in a row. Longest: ' + longest + '. Biggest move: $' + mx.toFixed(0) + '.</p>' +
+'<p class="hnote">' + pattern + ' Green bars are rises, red are drops, taller means a bigger move. Crypto.com gives 50 windows at a time (about 12 hours), so the page saves them and the count grows toward 100 as you keep using it.</p>';
+}
+
+// Line chart of the last 50 minutes with the price to beat and the window start marked.
+function renderChart() {
+var el = $("chart");
+if (candles.length < 6) return;
+var off = (basis || 0) - curAdj();
+var pts_ = candles.map(function (c) { return { t: c.t, v: c.c - off }; });
+var sp = spotNow();
+if (sp !== null) pts_.push({ t: Date.now(), v: sp });
+var strike = num("strike"), vals = pts_.map(function (q) { return q.v; });
+if (strike > 0) vals.push(strike);
+var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), pad = (hi - lo) * 0.12 || 1;
+lo -= pad; hi += pad;
+var W = 320, H = 150, L = 6, R = 62, T = 8, B = 18, t0 = pts_[0].t, t1 = Math.max(pts_[pts_.length - 1].t, t0 + 1);
+function X(t) { return L + (t - t0) / (t1 - t0) * (W - L - R); }
+function Y(v) { return T + (hi - v) / (hi - lo) * (H - T - B); }
+var d = pts_.map(function (q, i) { return (i ? "L" : "M") + X(q.t).toFixed(1) + " " + Y(q.v).toFixed(1); }).join(" ");
+var last = pts_[pts_.length - 1], above = !(strike > 0) || last.v >= strike, col = above ? "var(--accent)" : "var(--loss)";
+var ws = wStart(Date.now()), svg = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Bitcoin price over the last 50 minutes against the price to beat">';
+if (ws >= t0) svg += '<line x1="' + X(ws).toFixed(1) + '" y1="' + T + '" x2="' + X(ws).toFixed(1) + '" y2="' + (H - B) + '" style="stroke:var(--line)" stroke-dasharray="3 3"/><text x="' + (X(ws) + 3).toFixed(1) + '" y="' + (H - 5) + '">window opens</text>';
+if (strike > 0) svg += '<line x1="' + L + '" y1="' + Y(strike).toFixed(1) + '" x2="' + (W - R) + '" y2="' + Y(strike).toFixed(1) + '" style="stroke:var(--warn)" stroke-dasharray="4 3"/><text x="' + (W - R + 4) + '" y="' + (Y(strike) + 3).toFixed(1) + '" style="fill:var(--warn)">target</text>';
+svg += '<path d="' + d + '" fill="none" stroke-width="1.6" stroke-linejoin="round" style="stroke:' + col + '"/>' +
+'<circle cx="' + X(last.t).toFixed(1) + '" cy="' + Y(last.v).toFixed(1) + '" r="3.5" style="fill:' + col + '"/>' +
+'<text x="' + (W - R + 4) + '" y="' + (T + 8) + '">' + Math.round(hi) + '</text><text x="' + (W - R + 4) + '" y="' + (H - B) + '">' + Math.round(lo) + '</text></svg>';
+var gap = strike > 0 ? last.v - strike : null;
+el.innerHTML = svg + (gap !== null ? '<p class="hnote mono" style="margin-top:4px">' + (gap >= 0 ? "Above" : "Below") + ' the price to beat by $' + Math.abs(gap).toFixed(2) + '</p>' : '');
+}
+
+// ---- News and market context (CoinGecko) ----
+function esc(t) { return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+function safeUrl(u) { return /^https?:\/\//i.test(String(u)) ? String(u) : ""; }
+function ago(ts) {
+var m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+return m < 60 ? m + " min ago" : (m < 1440 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " d ago");
+}
+var BEAR = /pressure|fall|drop|plunge|liquidat|hawkish|sell-?off|bear|fear|dump|crash|outflow|declin|fail|shrink|pull ?back|pulls back|hack|exploit|ban\b|lawsuit|slump|tumbl|slides?|weak|risk-off|down\b/i;
+var BULL = /surge|rall(y|ies)|jump|soar|gains?\b|inflow|record|bull|breakout|accumulat|approval|approve|adopt|upgrade|whale buy|rebound|recover|climb|rises?\b|spike|all-time high/i;
+// Crude keyword count, newest headlines weigh most. It can misread a headline, which is why its effect is kept tiny.
+function scoreNews(arts) {
+var b = 0, r = 0, now = Date.now();
+arts.forEach(function (a) {
+var t = Date.parse(a.postedAt), age = isFinite(t) ? (now - t) / 3600000 : 99, w = age <= 3 ? 1 : (age <= 12 ? 0.5 : 0.2);
+if (BULL.test(a.title)) b += w;
+if (BEAR.test(a.title)) r += w;
+});
+return (b + r) === 0 ? 0 : (b - r) / (b + r + 1.5);
+}
+function moodNow() { return (mood !== null && Date.now() - moodAt < 1800000) ? mood : null; }
+function loadContext() {
+if (!mcp || busyN) return; busyN = true;
+function wrap(pm) { return pm.then(function (r) { return { r: r }; }, function (e) { return { e: e }; }); }
+Promise.all([
+wrap(mcp.callTool("CoinGecko", "get-crypto-news", { coinId: "bitcoin", limit: 12 }, { cache: false })),
+wrap(mcp.callTool("CoinGecko", "get-global-market", {}, { cache: false }))
+]).then(function (rs) {
+busyN = false; ctxErr = null;
+if (rs[0].r) {
+var p = unwrap(rs[0].r), arr = (p && p.articles) || [], seen = {};
+news = arr.filter(function (a) { if (!a || !a.title || seen[a.title]) return false; seen[a.title] = 1; return true; });
+if (news.length) { mood = scoreNews(news); moodAt = Date.now(); }
+} else ctxErr = rs[0].e && rs[0].e.code;
+if (rs[1].r) {
+var g = unwrap(rs[1].r) || {}, btc = (g.coins || []).filter(function (c) { return c.id === "bitcoin"; })[0];
+glob = { cap: g.marketCapChangePercentage24hUsd, dom: g.btcDominancePct, btc: btc && btc.priceChangePercentage24h };
+}
+renderCtx(); compute();
+});
+}
+function renderCtx() {
+var el = $("ctx");
+if (!news.length && !glob) {
+var m = ctxErr === "server_not_connected" ? "CoinGecko is not connected. Add it in claude.ai Settings, then Connectors."
+: (ctxErr === "not_in_manifest" || ctxErr === "consent_required" || ctxErr === "approval_required") ? "Allow CoinGecko when the page asks, then reopen it, to see news."
+: (ctxErr === "needs_reauth") ? "CoinGecko needs to be reconnected in claude.ai Settings, then Connectors."
+: ctxErr ? "News is not available right now." : "Loading news…";
+el.innerHTML = '<p class="note">' + esc(m) + '</p>'; return;
+}
+var md = moodNow(), label = md === null ? "No reading" : (md > 0.2 ? "Bullish" : (md < -0.2 ? "Bearish" : "Mixed"));
+var h = '<p style="margin:0 0 8px"><span class="chip">Headline mood: ' + label + (md === null ? "" : " (" + (md >= 0 ? "+" : "−") + Math.abs(md).toFixed(2) + ")") + '</span></p>';
+if (glob) h += '<p class="hnote mono" style="margin:0 0 8px">Whole crypto market, 24 hours: ' + (glob.cap >= 0 ? "+" : "−") + Math.abs(glob.cap).toFixed(1) + '%<br>Bitcoin, 24 hours: ' + (glob.btc >= 0 ? "+" : "−") + Math.abs(glob.btc).toFixed(1) + '% · Bitcoin share of market: ' + glob.dom.toFixed(1) + '%</p>';
+h += '<ul class="news">' + news.slice(0, 6).map(function (a) {
+var u = safeUrl(a.url), t = Date.parse(a.postedAt);
+return '<li>' + (u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener noreferrer">' + esc(a.title) + '</a>' : esc(a.title)) + '<div class="src">' + esc(a.source || "") + (isFinite(t) ? " · " + ago(t) : "") + '</div></li>';
+}).join("") + '</ul>';
+h += '<p class="hnote">Headline mood is a simple word count, so it can misread a headline. It nudges the prediction by about 3 points at most, because news rarely moves a 15-minute window. Posts from X or Reddit are not available here. This feed includes on-chain posts from Lookonchain.</p>';
+el.innerHTML = h;
+}
+
+// ---- The 2:30 call ----
+function maxBuy(prob) {
+var minE = num("minedge") / 100, tRet = num("tret") / 100;
+if (!(minE >= 0)) minE = 0.03; if (!(tRet >= 0)) tRet = 0.15;
+var b = 0;
+for (var c = 1; c <= 99; c++) { var q = c / 100, k = q + fee(q), ev = prob - k; if (ev >= minE && ev / k >= tRet) b = c; }
+return b;
+}
+function predFor(end) { for (var i = PRED.length - 1; i >= 0; i--) if (PRED[i].end === end) return PRED[i]; return null; }
+function beep(dir) {
+if (!$("usesound").checked || !snd) return;
+try {
+var o = snd.createOscillator(), g = snd.createGain();
+o.frequency.value = dir === "UP" ? 880 : (dir === "DOWN" ? 440 : 660); g.gain.value = 0.15;
+o.connect(g); g.connect(snd.destination); o.start(); o.stop(snd.currentTime + 0.4);
+} catch (e) {}
+}
+// The call times, in seconds into each 15-minute window. One call is locked in at each, using everything the page knows.
+var TIMES = [10, 150, 300, 450, 600, 720], callSec = 450;
+try { var cs0 = parseInt(localStorage.getItem("btc15-callsec"), 10); if (TIMES.indexOf(cs0) >= 0) callSec = cs0; } catch (e) {}
+function ck(sec) { return sec === 150 ? "c230" : "c" + sec; }
+// Lower bound of the true win rate (80% confidence), so a lucky short streak is not trusted.
+function wilson(w, n) {
+if (!n) return 0;
+var z = 1.2816, ph = w / n, d = 1 + z * z / n;
+return Math.max(0, (ph + z * z / (2 * n) - z * Math.sqrt(ph * (1 - ph) / n + z * z / (4 * n * n))) / d);
+}
+// The most you can pay per contract and still break even after fees, if the true win rate is that lower bound.
+function payUp(w, n) {
+var lb = wilson(w, n), best = 0;
+for (var c = 1; c < 100; c++) { var pr = c / 100; if (lb - (pr + fee(pr)) >= 0) best = c; }
+return best;
+}
+// Where the price is heading: the slope of the last 4 finished minutes, and where Bitcoin would end if that kept going.
+function headInfo(strike, mins) {
+var cur = Math.floor(Date.now() / 60000) * 60000;
+var d = candles.filter(function (c) { return c.t < cur; }).slice(-5);
+if (d.length < 5 || spot === null) return null;
+var slope = (d[d.length - 1].c - d[0].c) / 4, sp = spotNow();
+if (sp === null) return null;
+return { slope: slope, proj: sp + slope * Math.max(mins, 0) - strike };
+}
+// A call worth betting: very sure (80%+) and Bitcoin at least $20 away from the target when it was made.
+function isBet(c) { return c.dir !== "NONE" && isStrong(c) && Math.abs(c.spot - c.strike) >= 20; }
+function whySkip(c) { return !isStrong(c) ? "not sure enough (under 80%)" : "Bitcoin was within $20 of the target"; }
+function isStrong(c) { return c.dir !== "NONE" && (c.p >= 0.8 || c.p <= 0.2); }
+function lbl(sec) { return sec === 10 ? "0:10 opening" : fmtT(sec); }
+function fmtT(sec) { return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); }
+function makeCall() {
+if (!vol || spot === null || openPx === null || openTs !== wStart(Date.now())) return;
+if (Date.now() - lastOk > 15000) return;
+var el = Date.now() - openTs, end = openTs + 900000, made = false;
+TIMES.forEach(function (sec) {
+if (el < sec * 1000 || el > sec * 1000 + 25000) return;
+var e = predFor(end);
+if (e && e[ck(sec)]) return;
+if (!e) { e = { end: end, strike: openPx }; PRED.push(e); }
+var strike = num("strike") > 0 ? num("strike") : openPx, sp = spotNow(), mins = (end - Date.now()) / 60000;
+var p = model(sp, strike, mins, { trend: $("usetrend").checked, flow: $("useflow").checked, news: $("usenews").checked, prev: sec === 10 });
+var dir = p >= 0.58 ? "UP" : (p <= 0.42 ? "DOWN" : "NONE");
+var askv = dir === "UP" ? num("yes") / 100 : (dir === "DOWN" ? num("no") / 100 : NaN);
+var tri = trendInfo(), fli = flowInfo(), hd = headInfo(strike, mins);
+e[ck(sec)] = { tr: tri ? +tri.m.toFixed(3) : null, fl: fli ? +fli.f.toFixed(3) : null, sl: hd ? +hd.slope.toFixed(2) : null, t: Date.now(), p: p, dir: dir, strike: strike, spot: sp, max: dir === "NONE" ? 0 : maxBuy(dir === "UP" ? p : 1 - p), ask: (askv > 0 && askv < 1) ? askv : null };
+made = true;
+if (sec === callSec) beep(isBet(e[ck(sec)]) ? dir : "NONE");
+});
+if (made) { persistPred(); renderCall(); renderCheck(); }
+}
+function renderCall() {
+var el = $("call"), now = Date.now(), ws = wStart(now), end = ws + 900000, e = predFor(end), el2 = now - ws, h = "", key = ck(callSec);
+$("callh").textContent = "Call at " + lbl(callSec);
+var c = e && e[key];
+if (c) {
+var bet = isBet(c), cls = !bet ? "flat" : (c.dir === "UP" ? "up" : "down"), sp = spotNow();
+var side = c.dir === "UP" ? "YES" : "NO", head = c.dir === "NONE" ? "NO CALL" : (bet ? "BUY " + c.dir : "SKIP");
+var line = c.dir === "NONE"
+? "At " + lbl(callSec) + " the chance of rising was " + (c.p * 100).toFixed(0) + "%, too close to call. Skip this window."
+: "Chance of rising at " + lbl(callSec) + ": " + (c.p * 100).toFixed(0) + "%. " + (c.max ? "Pay " + c.max + "% or less for " + side + " (Up is YES, Down is NO)." : "No price makes " + side + " worth it after fees, so skip.");
+if (c.dir !== "NONE" && !bet) line = "Leaning " + c.dir + " at " + Math.round((c.dir === "UP" ? c.p : 1 - c.p) * 100) + "%, but " + whySkip(c) + ". Past results say skip this one.";
+else if (c.dir !== "NONE" && c.ask) line += " You typed " + Math.round(c.ask * 100) + "%: " + (c.max && c.ask * 100 <= c.max ? "within the limit." : "too expensive.");
+else if (c.dir !== "NONE" && c.max) line += " Type the ask below to check your price.";
+var hdl = "";
+if (c.dir !== "NONE" && c.sl !== null && c.sl !== undefined) {
+var mm = Math.max((end - c.t) / 60000, 0), pj = c.spot + c.sl * mm - c.strike, agree = (pj >= 0) === (c.dir === "UP");
+hdl = '<div class="trend mono">Heading at the call: ' + (c.sl >= 0 ? "up" : "down") + ' about $' + Math.abs(c.sl).toFixed(0) + ' a minute. If that kept going, Bitcoin would finish $' + Math.abs(pj).toFixed(0) + (pj >= 0 ? " above" : " below") + ' the target, which <b class="' + (agree ? "pos" : "neg") + '">' + (agree ? "agrees with" : "goes against") + '</b> the call. A trend often fades, so this is only a check.</div>';
+}
+var hist = "";
+if (c.dir !== "NONE") {
+var gg = PRED.filter(function (x) { var q = x[key]; return q && q.dir !== "NONE" && (q.right === 0 || q.right === 1); }), ww = gg.filter(function (x) { return x[key].right === 1; }).length, pu = payUp(ww, gg.length);
+hist = '<div class="trend mono">' + (isStrong(c) ? "STRONG call" : "Weaker call") + '. At ' + lbl(callSec) + ', past calls won ' + ww + ' of ' + gg.length + (gg.length >= 8 ? (pu ? ", so don\u2019t pay more than about " + pu + "%." : ", too weak to pay for at any price.") : ". Too few to judge yet.") + '</div>';
+}
+var live = "";
+if (c.dir !== "NONE" && sp !== null) {
+var d = sp - c.strike, right = (c.dir === "UP") === (d >= 0);
+live = '<div class="trend mono">Right now: Bitcoin is $' + Math.abs(d).toFixed(2) + (d >= 0 ? " above" : " below") + ' the target, so the call is <b class="' + (right ? "pos" : "neg") + '">' + (right ? "ahead" : "behind") + '</b>.</div>';
+}
+h = '<div class="pred ' + cls + (now - c.t < 8000 ? " flash" : "") + '"><div class="k">Call made at ' + lbl(callSec) + ' · ' + new Date(c.t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" }) + '</div><div class="call">' + (!bet ? "◆ " : (c.dir === "UP" ? "▲ " : "▼ ")) + head + '</div><div class="note" style="margin:0;color:var(--fg)">' + esc(line) + '</div>' + hdl + hist + live + '</div>';
+} else if (el2 < callSec * 1000) {
+var left = Math.ceil((callSec * 1000 - el2) / 1000);
+h = '<div class="pred flat"><div class="k">Next call</div><div class="call mono">in ' + String(Math.floor(left / 60)).padStart(2, "0") + ':' + String(left % 60).padStart(2, "0") + '</div><div class="note" style="margin:0">At ' + lbl(callSec) + ' into the window the page decides Up, Down or no call, using price, candles, order flow and news.</div></div>';
+} else {
+h = '<div class="pred flat"><div class="k">This window</div><div class="call">No call</div><div class="note" style="margin:0">The page did not have a live price at ' + lbl(callSec) + ' into this window. The next call comes at ' + lbl(callSec) + ' into the next one.</div></div>';
+}
+var prev = predFor(ws);
+if (prev && prev[key] && prev[key].dir !== "NONE") {
+var r = prev[key].right;
+h += '<p class="hnote mono" style="margin:8px 0 0">Last window: ' + prev[key].dir + ' call, ' + (r === 1 ? "right" : (r === 0 ? "wrong" : "not scored yet")) + '.</p>';
+}
+var sp2 = spotNow();
+var rows = TIMES.map(function (sec) {
+var c2 = e && e[ck(sec)], what, st;
+if (c2) {
+what = c2.dir === "NONE" ? "No call" : (isBet(c2) ? (c2.dir === "UP" ? "▲ BUY UP" : "▼ BUY DOWN") : "skip (" + c2.dir.toLowerCase() + ")");
+if (c2.dir === "NONE" || !isBet(c2)) st = "skip";
+else if (sp2 !== null) { var ok = (c2.dir === "UP") === (sp2 - c2.strike >= 0); st = ok ? "ahead" : "behind"; }
+else st = "open";
+} else if (el2 < sec * 1000) { what = "in " + Math.ceil((sec * 1000 - el2) / 1000) + "s"; st = "waiting"; }
+else { what = "missed"; st = "—"; }
+return '<span>' + lbl(sec) + (sec === callSec ? " ←" : "") + '</span><span class="mono">' + what + '</span><span class="mono">' + (c2 ? Math.round(c2.p * 100) + "%" : "—") + '</span><span class="mono">' + st + '</span>';
+}).join("");
+var pvi = prevInfo();
+if (pvi) h += '<p class="hnote mono" style="margin:12px 0 0">Previous 15 minutes: ' + (pvi.d >= 0 ? "\u25B2 up $" : "\u25BC down $") + Math.abs(pvi.d).toFixed(2) + '. The 0:10 opening guess leans on that, plus the recent candles, order flow and news.</p>';
+h += '<p class="hnote" style="margin:14px 0 0"><b>Every call this window</b></p><div class="tbl c4"><span class="h">Time</span><span class="h">Call</span><span class="h">Chance up</span><span class="h">Now</span>' + rows + '</div>';
+if (prev) {
+var prow = TIMES.map(function (sec) {
+var c3 = prev[ck(sec)], r3 = c3 ? c3.right : null;
+return '<span>' + lbl(sec) + '</span><span class="mono">' + (c3 ? (c3.dir === "NONE" ? "No call" : c3.dir) : "—") + '</span><span class="mono">' + (c3 ? Math.round(c3.p * 100) + "%" : "—") + '</span><span class="mono ' + (r3 === 1 ? "pos" : (r3 === 0 ? "neg" : "")) + '">' + (r3 === 1 ? "right" : (r3 === 0 ? "wrong" : "—")) + '</span>';
+}).join("");
+h += '<p class="hnote" style="margin:14px 0 0"><b>Previous window, all calls</b></p><div class="tbl c4"><span class="h">Time</span><span class="h">Call</span><span class="h">Chance up</span><span class="h">Result</span>' + prow + '</div>';
+}
+el.innerHTML = h;
+renderScore();
+}
+
+// How many calls won and lost at the selected time, and which time has done best.
+function renderScore() {
+var el = $("score"), key = ck(callSec);
+$("scoreh").textContent = "Scorecard for the " + lbl(callSec) + " call";
+var calls = PRED.filter(function (e) { return e[key] && e[key].dir !== "NONE"; }).sort(function (a, b) { return a.end - b.end; });
+var table = (function () {
+var rows = TIMES.map(function (sec) {
+var k = ck(sec), g = PRED.filter(function (e) { return e[k] && e[k].dir !== "NONE" && (e[k].right === 0 || e[k].right === 1); });
+var w = g.filter(function (e) { return e[k].right === 1; }).length, pl = 0, pn2 = 0, pu = payUp(w, g.length);
+g.forEach(function (e) { var a = e[k].ask; if (!(a > 0 && a < 1)) return; pl += e[k].right === 1 ? 1 - a - fee(a) : -(a + fee(a)); pn2++; });
+return '<span>' + lbl(sec) + (sec === callSec ? " \u2190" : "") + '</span><span class="mono">' + w + "/" + g.length + '</span><span class="mono">' + (g.length ? Math.round(w / g.length * 100) + "%" : "\u2014") + '</span><span class="mono ' + (pu >= 50 ? "pos" : "") + '">' + (g.length >= 8 ? (pu ? "\u2264" + pu + "%" : "never") : "\u2014") + '</span><span class="mono ' + (pn2 ? (pl >= 0 ? "pos" : "neg") : "") + '">' + (pn2 ? money(pl) : "\u2014") + '</span>';
+}).join("");
+var strongRows = (function () {
+var k = ck(callSec), st = { s: [0, 0], w: [0, 0] };
+PRED.forEach(function (e) { var c = e[k]; if (!c || c.dir === "NONE" || (c.right !== 0 && c.right !== 1)) return; var t = isStrong(c) ? st.s : st.w; t[0]++; t[1] += c.right; });
+var bn = 0, bw = 0;
+PRED.forEach(function (e) { var c = e[k]; if (c && isBet(c) && (c.right === 0 || c.right === 1)) { bn++; bw += c.right; } });
+return '<p class="hnote mono" style="margin:10px 0 0"><b>Calls worth betting at ' + lbl(callSec) + '</b> (strong, 20+ from the target): won ' + bw + ' of ' + bn + (bn >= 8 ? ', so pay up to ' + payUp(bw, bn) + '%' : ', too few to judge') + '.</p><p class="hnote mono" style="margin:6px 0 0">At ' + lbl(callSec) + ': strong calls (80%+ sure) won ' + st.s[1] + ' of ' + st.s[0] + ' \u00b7 weaker calls won ' + st.w[1] + ' of ' + st.w[0] + '.</p>';
+})();
+return '<p class="hnote" style="margin:14px 0 0"><b>Which time has called best so far</b></p><div class="tbl c5"><span class="h">Call time</span><span class="h">Won</span><span class="h">Win rate</span><span class="h">Pay up to</span><span class="h">Profit*</span>' + rows + strongRows + '</div>' +
+'<p class="hnote" style="margin:0">Later calls usually win more often, but the market price is higher by then too, so the time that wins most is not always the one that pays best. Calls with no clear lean are left out. Wait for 30 or more calls at a time before comparing.</p><p class=\"hnote\" style=\"margin:0\"><b>Pay up to</b> is the highest price where this time has still broken even after fees, using a cautious estimate of its win rate. If Kalshi asks more than that at that time, skip it, even when the call wins often. Late calls win the most but the Kalshi price is already high by then.</p><p class="hnote" style="margin:0">*Profit is for one contract per call, after fees, at the Kalshi price you had typed (or the site read) at the moment of each call. Calls with no price are left out. Pick the time with the best profit, not just the best win rate.</p>';
+})();
+if (!calls.length) { el.innerHTML = '<p class="note">No ' + lbl(callSec) + ' calls yet. The first one appears ' + lbl(callSec) + ' into a window while this page is open. Wins and losses are counted here once each window closes.</p>' + table; return; }
+var wins = calls.filter(function (e) { return e[key].right === 1; }).length;
+var losses = calls.filter(function (e) { return e[key].right === 0; }).length;
+var pend = calls.length - wins - losses, scored = wins + losses;
+var done = calls.filter(function (e) { return e[key].right === 0 || e[key].right === 1; });
+var streak = 0, last = done.length ? done[done.length - 1][key].right : null;
+for (var i = done.length - 1; i >= 0 && done[i][key].right === last; i--) streak++;
+function part(dir) {
+var g = done.filter(function (e) { return e[key].dir === dir; });
+return g.filter(function (e) { return e[key].right === 1; }).length + " of " + g.length;
+}
+var pnl = 0, pn = 0;
+done.forEach(function (e) {
+var a = e[key].ask; if (!(a > 0 && a < 1)) return;
+pnl += e[key].right === 1 ? 1 - a - fee(a) : -(a + fee(a)); pn++;
+});
+var rate = scored ? Math.round(wins / scored * 100) : null;
+var chips = calls.slice(-14).map(function (e) {
+var r = e[key].right, cls = r === 1 ? "w" : (r === 0 ? "l" : "p"), t = new Date(e.end).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+return '<span class="chip2 ' + cls + '" title="' + t + ' window, ' + e[key].dir + ' call">' + (e[key].dir === "UP" ? "▲" : "▼") + (r === 1 ? "W" : (r === 0 ? "L" : "…")) + '</span>';
+}).join("");
+el.innerHTML = '<div class="stats"><div class="stat"><div class="k">Wins</div><div class="v mono pos">' + wins + '</div></div><div class="stat"><div class="k">Losses</div><div class="v mono neg">' + losses + '</div></div><div class="stat"><div class="k">Win rate</div><div class="v mono">' + (rate === null ? "—" : rate + "%") + '</div></div></div>' +
+'<p class="hnote mono" style="margin:0">Waiting for the window to close: ' + pend + '<br>' + (scored ? 'Streak: ' + streak + (last === 1 ? " win" : " loss") + (streak > 1 ? (last === 1 ? "s" : "es") : "") + ' in a row<br>' : '') + 'Up calls won ' + part("UP") + ' · Down calls won ' + part("DOWN") +
+(pn ? '<br>At the prices you typed, one contract each: ' + money(pnl) + ' over ' + pn + ' call' + (pn > 1 ? "s" : "") : '') + '</p>' +
+'<div class="chips" aria-label="Last calls">' + chips + '</div>' +
+'<p class="hnote">' + (scored < 30 ? 'Under 30 scored calls, so this is mostly luck. ' : '') + 'A coin flip wins 50% of the time before the price and fee, so you need to beat that by a clear margin to come out ahead. Saved in this browser.</p>' + table;
+}
+
+// Order book imbalance near the price plus the buy/sell split of the last two minutes of trades.
+function loadFlow() {
+if (!mcp || busyF) return; busyF = true;
+Promise.all([
+callNamed("book", { instrument_name: INSTR, depth: 20 }),
+callNamed("trades", { instrument_name: INSTR, count: 150 })
+]).then(function (rs) {
+busyF = false;
+var b = unwrap(rs[0]) || {}, t = unwrap(rs[1]) || {};
+var bids = (b.bids || (b.data && b.data.bids) || []).map(function (x) { return { p: parseFloat(x.price), q: parseFloat(x.qty) }; });
+var asks = (b.asks || (b.data && b.data.asks) || []).map(function (x) { return { p: parseFloat(x.price), q: parseFloat(x.qty) }; });
+if (!bids.length || !asks.length) return;
+var bb = Math.max.apply(null, bids.map(function (x) { return x.p; })), ba = Math.min.apply(null, asks.map(function (x) { return x.p; }));
+var mid = (bb + ba) / 2, band = mid * 0.0005;
+var B = bids.filter(function (x) { return x.p >= mid - band; }).reduce(function (s, x) { return s + x.q * x.p; }, 0);
+var A = asks.filter(function (x) { return x.p <= mid + band; }).reduce(function (s, x) { return s + x.q * x.p; }, 0);
+var imb = (B + A) > 0 ? (B - A) / (B + A) : 0;
+var cut = Date.now() - 120000, buy = 0, sell = 0;
+((t.data) || []).forEach(function (x) {
+var ts = Date.parse(x.timestamp), n = parseFloat(x.price) * parseFloat(x.qty);
+if (!isFinite(ts) || ts < cut || !isFinite(n)) return;
+if (x.side === "buy") buy += n; else if (x.side === "sell") sell += n;
+});
+var fl = (buy + sell) > 0 ? (buy - sell) / (buy + sell) : 0;
+flowHist.push(0.5 * imb + 0.5 * fl);
+if (flowHist.length > 6) flowHist.shift();
+var f = flowHist.reduce(function (a, c) { return a + c; }, 0) / flowHist.length;
+flow = { imb: imb, flow: fl, f: Math.max(-1, Math.min(1, f)), spread: (ba - bb) / mid, at: Date.now() };
+compute();
+}, function () { busyF = false; });
+}
+function flowInfo() { return (flow && Date.now() - flow.at < 40000) ? flow : null; }
+
+// Trend read from the last 5 finished 1-minute candles plus a volume check.
+function trendInfo() {
+if (!candles.length || !vol) return null;
+var cur = Math.floor(Date.now() / 60000) * 60000;
+var done = candles.filter(function (c) { return c.t < cur; }).slice(-5);
+if (done.length < 5) return null;
+var ups = done.filter(function (c) { return c.c > c.o; }).length;
+var downs = done.filter(function (c) { return c.c < c.o; }).length;
+var mom = done.reduce(function (s, c) { return s + Math.log(c.c / c.o); }, 0) / (vol * Math.sqrt(5));
+mom = Math.max(-2, Math.min(2, mom));
+var allV = candles.map(function (c) { return c.v; }).filter(isFinite);
+var avgV = allV.reduce(function (a, b) { return a + b; }, 0) / (allV.length || 1);
+var recV = done.slice(-3).reduce(function (a, c) { return a + (isFinite(c.v) ? c.v : 0); }, 0) / 3;
+var vr = avgV > 0 ? recV / avgV : 1;
+var m = vr > 1.5 ? mom * 1.25 : mom;
+var str = done.map(function (c) { return c.c > c.o ? "▲" : (c.c < c.o ? "▼" : "▬"); }).join("");
+return { m: m, mom: mom, vr: vr, ups: ups, downs: downs, str: str };
+}
+
+// Chance of finishing above the strike. Averages three volatility cases so sudden jumps
+// (fat tails) keep the model from being overconfident, then adds small signal tilts.
+var SC = [0.75, 1, 1.6].map(function (k) { return k / Math.sqrt(1.18); }), W = [0.3, 0.5, 0.2];
+function model(sp, strike, mins, o) {
+var s = vol * Math.sqrt(Math.max(mins, 0.01)), x = Math.log(sp / strike), tilt = 0;
+if (o.trend) { var tr = trendInfo(); if (tr) tilt += 0.25 * tr.m; }
+if (o.flow) { var fl = flowInfo(); if (fl) tilt += 0.3 * fl.f; }
+if (o.news) { var md = moodNow(); if (md !== null) tilt += 0.1 * md; }
+if (o.prev) { var pv = prevInfo(); if (pv) tilt += 0.15 * pv.m; }
+var p = 0;
+for (var i = 0; i < 3; i++) p += W[i] * cdf(x / (s * SC[i]) + tilt);
+return p;
+}
+
+// What the previous 15-minute window did, in units of a normal 15-minute move. Used for the opening guess.
+function prevInfo() {
+if (!vol) return null;
+var pt = wStart(Date.now()) - 900000, w = null;
+for (var i = 0; i < WINS.length; i++) if (WINS[i].t === pt) w = WINS[i];
+if (!w) return null;
+var mv = Math.log(w.c / w.o) / (vol * Math.sqrt(15));
+return { m: Math.max(-2, Math.min(2, mv)), d: w.c - w.o };
+}
+
+function cautions(mins) {
+var c = [];
+if (vol15 && volHour && vol15 / volHour > 1.6) c.push("Volatility is spiking, so the model is less reliable.");
+var fl = flowInfo();
+if (fl && fl.spread > 0.0002) c.push("Wide spread, so the market is thin.");
+if (mins < 1.5) c.push("Under 90 seconds left. Prices can move before you can act.");
+if (spot !== null && Date.now() - lastOk > 15000) c.push("The price feed is stale.");
+return c;
+}
+
+function tickClock() {
+var ms = Math.max(0, wStart(Date.now()) + 900000 - Date.now()), s = Math.ceil(ms / 1000);
+$("clock").textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+if (openTs !== null && openTs !== wStart(Date.now())) { openPx = null; openRaw = null; openTs = null; strikeEdited = false; $("strike").value = ""; loadCandles(); }
+var fresh = Date.now() - lastOk < 15000;
+$("dot").className = "dot" + (spot === null ? "" : (fresh ? " on" : " bad"));
+$("status").textContent = spot === null ? (mcp === null ? "No live feed" : "Connecting…") : (fresh ? "Live USD price" : "Connection lost, retrying");
+}
+
+function compute() {
+var sp = spotNow();
+if (sp !== null) $("price").textContent = usd(sp);
+$("volshow").textContent = vol ? (vol * 100).toFixed(3) + "%" : "—";
+$("openshow").textContent = openPx ? usd(openPx) : "—";
+if (!strikeEdited && openPx) $("strike").value = openPx.toFixed(2);
+renderChart();
+var out = $("result"), strike = num("strike"), mins = minsLeft(), minE = num("minedge") / 100;
+if (sp === null || !vol || !(strike > 0) || !(minE >= 0)) { out.innerHTML = '<p class="note">Waiting for a live price and a price to beat.</p>'; return; }
+var tr = trendInfo(), fl = flowInfo();
+var useT = $("usetrend").checked && !!tr, useF = $("useflow").checked && !!fl, useN = $("usenews").checked && moodNow() !== null;
+var base = model(sp, strike, mins, {});
+var p = model(sp, strike, mins, { trend: useT, flow: useF, news: useN });
+(function () {
+var ya = num("yes") / 100, na = num("no") / 100, box = $("payout"), rows = "", best = null;
+[["YES (Up)", ya, p], ["NO (Down)", na, 1 - p]].forEach(function (x) {
+var a = x[1], pw = x[2];
+if (!(a > 0 && a < 1)) { rows += '<span>' + x[0] + '</span><span class="mono">—</span><span class="mono">—</span><span class="mono">—</span><span class="mono">—</span>'; return; }
+var cost = a + fee(a), win = 1 - cost, ev = pw - cost, ret = ev / cost;
+if (!best || ret > best.ret) best = { n: x[0], ret: ret };
+rows += '<span>' + x[0] + '</span><span class="mono">' + Math.round(cost * 100) + '%</span><span class="mono pos">+' + Math.round(win * 100) + '%</span><span class="mono">' + Math.round(pw * 100) + '%</span><span class="mono ' + (ev >= 0 ? "pos" : "neg") + '">' + (ev >= 0 ? "+" : "−") + Math.abs(ret * 100).toFixed(0) + '%</span>';
+});
+box.innerHTML = '<h2 style="margin-top:0">Payout if you bet</h2><div class="tbl c5"><span class="h">Side</span><span class="h">Cost</span><span class="h">Win pays</span><span class="h">My odds</span><span class="h">Expected</span>' + rows + '</div><p class="hnote" style="margin:0">Cost includes the fee, per contract. Win pays is profit on a win; a loss costs the full price. Cheap prices pay the most, but they only pay off if the odds really are better than the price says. ' + (best ? (best.ret > 0.1 ? "Better value right now: <b>" + best.n + "</b>, about " + Math.round(best.ret * 100) + "% expected return by this model." : "Neither side shows a clear return right now, so skipping is a fine choice.") : "Type or wait for the Kalshi prices to see this.") + '</p>';
+})();
+var lean = p >= 0.6 ? "up" : (p <= 0.4 ? "down" : "flat");
+var cs = cautions(mins).map(function (t) { return '<p class="caution">⚠ ' + t + '</p>'; }).join("");
+var trendHtml = tr ? 'Last 5 candles ' + tr.str + ' (' + tr.ups + ' up, ' + tr.downs + ' down)<br>Momentum ' + (tr.mom >= 0 ? "+" : "−") + Math.abs(tr.mom).toFixed(1) + 'σ · volume ' + tr.vr.toFixed(1) + '× the hour average<br>' : 'Trend signal waiting for candles<br>';
+var flowHtml = fl ? 'Order book: ' + (fl.imb >= 0 ? "buyers" : "sellers") + ' heavier by ' + Math.abs(fl.imb * 100).toFixed(0) + '% · recent trades ' + Math.round((fl.flow + 1) / 2 * 100) + '% buys<br>' : 'Order flow not available<br>';
+var shiftHtml = (useT || useF || useN) ? 'Signals move Rise by ' + pts(p - base) + ' (' + [useT ? "trend" : "", useF ? "flow" : "", useN ? "news" : ""].filter(Boolean).join(" + ") + ')' : 'Signals are off';
+var html = '<div class="pred ' + lean + '">' + cs + '<div class="k">Prediction for this window</div><div class="call">' + (lean === "up" ? "▲ Rise" : (lean === "down" ? "▼ Drop" : "◆ Toss-up")) + '</div><div class="bar"><i style="width:' + (p * 100).toFixed(1) + '%"></i></div><div class="split mono"><span>Rise ' + (p * 100).toFixed(0) + '%</span><span>Drop ' + ((1 - p) * 100).toFixed(0) + '%</span></div><div class="trend mono">' + trendHtml + flowHtml + shiftHtml + '</div></div>' +
+'<div class="big"><span class="note" style="margin:0">Chance Bitcoin finishes above the price to beat</span><span class="num mono">' + (p * 100).toFixed(1) + '%</span></div>';
+var tRet = num("tret") / 100; if (!(tRet >= 0)) tRet = 0.15;
+var bank = num("bank"); if (!(bank > 0)) bank = 100;
+function cost(q) { return q + fee(q); }
+// Highest price (in cents) that still clears both your minimum edge and your target return, after fees.
+function buyBelow(prob) { var b = 0; for (var c = 1; c <= 99; c++) { var q = c / 100, k = cost(q), ev = prob - k; if (ev >= minE && ev / k >= tRet) b = c; } return b; }
+var my = buyBelow(p), mn = buyBelow(1 - p);
+html += '<div class="max"><div><div class="k">Buy YES at or below</div><div class="v mono">' + (my ? my + "%" : "no price") + '</div></div><div><div class="k">Buy NO at or below</div><div class="v mono">' + (mn ? mn + "%" : "no price") + '</div></div></div>' +
+'<p class="hnote" style="margin-top:8px">These prices clear your minimum edge and your ' + (tRet * 100).toFixed(0) + '% target return after fees. A cheaper price means a bigger return if you are right, but the model has to be right more often than the price says.</p>';
+var yes = num("yes") / 100, no = num("no") / 100, sides = [], blocked = cautions(mins);
+if (yes > 0 && yes < 1) sides.push({ n: "YES", pr: yes, m: p });
+if (no > 0 && no < 1) sides.push({ n: "NO", pr: no, m: 1 - p });
+if (sides.length) {
+sides.forEach(function (s) {
+var k = cost(s.pr);
+s.cost = k; s.edge = s.m - k; s.exp = s.edge / k; s.win = (1 - k) / k;
+var kelly = s.edge > 0 ? s.edge / (1 - k) : 0;           // full Kelly fraction of bankroll
+s.cnt = Math.floor(bank * Math.min(0.05, kelly / 4) / k);  // quarter Kelly, never more than 5% of bankroll
+});
+var best = sides.slice().sort(function (a, b) { return b.exp - a.exp; })[0];
+var okEdge = best.edge >= minE, okRet = best.exp >= tRet, safe = blocked.length === 0, lim = best.n === "YES" ? my : mn;
+if (okEdge && okRet && safe) {
+html += '<div class="verdict good"><strong>BUY ' + best.n + ' now</strong><span>Costs ' + Math.round(best.pr * 100) + '% plus ' + Math.round(fee(best.pr) * 100) + '% fee and pays $1 if right: +' + (best.win * 100).toFixed(0) + '% return if it wins, expected ' + (best.exp >= 0 ? "+" : "−") + Math.abs(best.exp * 100).toFixed(0) + '% on average. ' +
+(best.cnt > 0 ? 'Suggested paper stake: ' + best.cnt + ' contract' + (best.cnt > 1 ? 's' : '') + ' (about $' + (best.cnt * best.cost).toFixed(2) + ').' : 'Your bankroll is too small for one contract at the suggested stake size.') + '</span></div>';
+} else if (okEdge && !okRet) {
+html += '<div class="verdict none"><strong>WAIT for a better price</strong><span>The model likes ' + best.n + ', but the expected return is under your ' + (tRet * 100).toFixed(0) + '% target. ' + (lim ? 'Buy ' + best.n + ' at ' + lim + '% or less.' : 'No price clears your targets right now.') + '</span></div>';
+} else if (okEdge && okRet) {
+html += '<div class="verdict none"><strong>WAIT</strong><span>' + blocked[0] + '</span></div>';
+} else {
+html += '<div class="verdict none"><strong>SKIP this window</strong><span>No side clears your edge and return targets at these prices. Skipping is a fine call.</span></div>';
+}
+sides.forEach(function (s) {
+html += '<div class="side"><b>' + s.n + '</b><span class="edge mono ' + (s.edge >= 0 ? "pos" : "neg") + '">' + pts(s.edge) + '</span><span class="meta mono">price ' + Math.round(s.pr * 100) + '% · model ' + (s.m * 100).toFixed(1) + '% · fee ' + Math.round(fee(s.pr) * 100) + '%<br>pays +' + (s.win * 100).toFixed(0) + '% if right · expected ' + (s.exp >= 0 ? "+" : "−") + Math.abs(s.exp * 100).toFixed(0) + '%</span><button type="button" data-log="' + s.n + '" data-pr="' + s.pr + '" data-m="' + s.m + '" data-strike="' + strike + '" data-n="' + Math.max(1, s.cnt) + '">Log paper ' + s.n + '</button></div>';
+});
+} else html += '<p class="note">Type the YES and NO asks to see a buy, wait or skip call.</p>';
+out.innerHTML = html;
+}
+
+// Automatic model check: snapshot the prediction at about 5 and 2 minutes left in every window
+// (with and without signals), then score it against what Bitcoin actually did.
+function recordPreds() {
+if (!vol || spot === null || openPx === null || openTs !== wStart(Date.now())) return;
+if (Date.now() - lastOk > 15000) return;
+var mins = minsLeft(), end = openTs + 900000, e = null;
+for (var i = PRED.length - 1; i >= 0; i--) if (PRED[i].end === end) { e = PRED[i]; break; }
+var key = (mins <= 5 && mins >= 4.4) ? "m5" : ((mins <= 2 && mins >= 1.4) ? "m2" : null);
+if (!key) return;
+if (!e) { e = { end: end, strike: openPx }; PRED.push(e); }
+if (e[key]) return;
+e[key] = { b: model(spot, openPx, mins, {}), a: model(spot, openPx, mins, { trend: true, flow: true, news: true }) };
+persistPred(); renderCheck();
+}
+function settlePreds() {
+var changed = false;
+PRED.forEach(function (e) {
+if (e.res !== undefined && e.res !== null) return;
+var fin = finalAt(e.end);
+if (!isFinite(fin) || Date.now() < e.end + 5000) return;
+e.res = fin > e.strike ? 1 : 0; e.fin = fin; changed = true;
+TIMES.forEach(function (sec) { var c = e[ck(sec)]; if (c && c.dir !== "NONE") c.right = ((fin >= c.strike) === (c.dir === "UP")) ? 1 : 0; });
+});
+if (changed) { persistPred(); renderCheck(); }
+}
+function renderCheck() {
+var done = PRED.filter(function (e) { return e.res === 0 || e.res === 1; });
+var el = $("check");
+var made = PRED.filter(function (e) { return e[ck(callSec)] && e[ck(callSec)].dir !== "NONE"; });
+var scored = made.filter(function (e) { return e[ck(callSec)].right === 0 || e[ck(callSec)].right === 1; });
+var nocall = PRED.filter(function (e) { return e[ck(callSec)] && e[ck(callSec)].dir === "NONE"; }).length;
+var callsHtml = made.length || nocall
+? '<p class="note mono" style="margin:0 0 12px">' + lbl(callSec) + ' calls: ' + made.length + ' made (' + made.filter(function (e) { return e[ck(callSec)].dir === "UP"; }).length + ' up, ' + made.filter(function (e) { return e[ck(callSec)].dir === "DOWN"; }).length + ' down), ' + nocall + ' no-call.<br>' +
+(scored.length ? 'Right ' + scored.filter(function (e) { return e[ck(callSec)].right === 1; }).length + ' of ' + scored.length + ' (' + Math.round(scored.filter(function (e) { return e[ck(callSec)].right === 1; }).length / scored.length * 100) + '%). A coin flip is 50%, and you also pay the price and fee.' : 'None scored yet.') + '</p>'
+: '';
+function brier(key, f) {
+var g = done.filter(function (e) { return e[key]; });
+if (!g.length) return null;
+return { n: g.length, v: g.reduce(function (s, e) { var d = e[key][f] - e.res; return s + d * d; }, 0) / g.length };
+}
+var rows = [["5 min left", "m5"], ["2 min left", "m2"]], any = false, html = "";
+var t = '<div class="tbl c4"><span class="h">When</span><span class="h">Model only</span><span class="h">With signals</span><span class="h">Windows</span>';
+rows.forEach(function (r) {
+var b = brier(r[1], "b"), a = brier(r[1], "a");
+if (!b) return; any = true;
+t += '<span>' + r[0] + '</span><span class="mono">' + b.v.toFixed(3) + '</span><span class="mono ' + (a.v < b.v ? "pos" : (a.v > b.v ? "neg" : "")) + '">' + a.v.toFixed(3) + '</span><span class="mono">' + b.n + '</span>';
+});
+t += '</div>';
+if (!any) {
+el.innerHTML = callsHtml + '<p class="note">While this page is open it records its call at 5 and 2 minutes left in every window, then scores it when the window closes. Results appear here after the first window.</p>';
+return;
+}
+html += '<p class="note" style="margin:0">Error score (lower is better). A coin flip scores 0.250. Green means the signals helped.</p>' + t;
+var bk = [[0, .2], [.2, .4], [.4, .6], [.6, .8], [.8, 1.01]];
+var b5 = done.filter(function (e) { return e.m5; });
+var rowsB = bk.map(function (r) {
+var g = b5.filter(function (e) { var p = e.m5.a; return p >= r[0] && p < r[1]; });
+if (!g.length) return "";
+var avg = g.reduce(function (s, e) { return s + e.m5.a; }, 0) / g.length, act = g.reduce(function (s, e) { return s + e.res; }, 0) / g.length;
+return '<span>' + Math.round(r[0] * 100) + '–' + Math.min(100, Math.round(r[1] * 100)) + '%</span><span class="mono">' + g.length + '</span><span class="mono">' + Math.round(avg * 100) + '%</span><span class="mono">' + Math.round(act * 100) + '%</span>';
+}).join("");
+if (rowsB) html += '<p class="note" style="margin:0">When it said Rise at 5 minutes left (with signals), how often Bitcoin did rise:</p><div class="tbl c4b"><span class="h">It said</span><span class="h">Windows</span><span class="h">Avg said</span><span class="h">Actually rose</span>' + rowsB + '</div>';
+if (done.length < 100) html += '<p class="warnline">Under 100 windows so far. These scores are still mostly luck.</p>';
+el.innerHTML = callsHtml + html;
+}
+
+function settleLog() {
+var changed = false;
+LOG.forEach(function (e) {
+if (e.result) return;
+var fin = finalAt(e.end);
+if (!isFinite(fin) || Date.now() < e.end + 5000) return;
+var won = (e.side === "YES") === (fin > e.strike);
+e.final = fin; e.result = won ? "won" : "lost";
+e.pnl = (won ? 1 - e.price - e.fee : -(e.price + e.fee)) * (e.n || 1);
+changed = true;
+});
+if (changed) { persist(); renderLog(); }
+}
+
+function renderLog() {
+var done = LOG.filter(function (e) { return e.result; });
+var total = done.reduce(function (s, e) { return s + Number(e.pnl || 0); }, 0);
+var wins = done.filter(function (e) { return e.result === "won"; }).length;
+function grp(on) {
+var g = done.filter(function (e) { return !!(e.sig || e.flow) === on; });
+if (!g.length) return null;
+var w = g.filter(function (e) { return e.result === "won"; }).length;
+var t = g.reduce(function (s, e) { return s + Number(e.pnl || 0); }, 0);
+return g.length + " trades, " + Math.round(w / g.length * 100) + "% won, " + money(t);
+}
+var gOn = grp(true), gOff = grp(false);
+var compare = (gOn && gOff) ? '<p class="note mono" style="margin:0 0 12px">Signals on: ' + gOn + '<br>Signals off: ' + gOff + '</p>' : "";
+$("summary").innerHTML = done.length
+? '<div class="stats"><div class="stat"><div class="k">Settled</div><div class="v mono">' + done.length + '</div></div><div class="stat"><div class="k">Win rate</div><div class="v mono">' + Math.round(wins / done.length * 100) + '%</div></div><div class="stat"><div class="k">P&amp;L</div><div class="v mono ' + (total >= 0 ? "pos" : "neg") + '">' + money(total) + '</div></div></div><p class="note mono" style="margin:0 0 12px">Paper bankroll: $' + ((num("bank") > 0 ? num("bank") : 100) + total).toFixed(2) + ' (if you started with $' + (num("bank") > 0 ? num("bank") : 100).toFixed(0) + ')</p>' + compare + (done.length < 200 ? '<p class="warnline">Under 200 settled trades, this is mostly luck. Do not trust it yet.</p>' : "")
+: '<p class="note">Tap Log paper on a result. It settles by itself when the 15 minutes end, but only while this page is open.</p>';
+$("log").innerHTML = LOG.slice().reverse().map(function (e) {
+var right = e.result ? '<span class="mono ' + (e.pnl >= 0 ? "pos" : "neg") + '" style="font-weight:600">' + money(e.pnl) + '</span>' : '<span class="sm">open</span>';
+var t = new Date(e.end).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+return '<li><div><b>BTC ' + (e.side === "NO" ? "NO" : "YES") + ((e.n || 1) > 1 ? ' ×' + e.n : '') + '</b><div class="sm mono">' + Math.round(e.price * 100) + '% · model ' + (e.model * 100).toFixed(0) + '% · ends ' + t + (e.final ? ' · final ' + usd(e.final) : "") + '</div></div>' + right + '</li>';
+}).join("");
+}
+
+$("result").addEventListener("click", function (ev) {
+var b = ev.target.closest("[data-log]"); if (!b) return;
+var side = b.getAttribute("data-log") === "NO" ? "NO" : "YES";
+var pr = parseFloat(b.getAttribute("data-pr")), m = parseFloat(b.getAttribute("data-m")), st = parseFloat(b.getAttribute("data-strike"));
+LOG.push({ id: Date.now(), side: side, price: pr, model: m, fee: fee(pr), strike: st, n: Math.max(1, parseInt(b.getAttribute('data-n'), 10) || 1), sig: $("usetrend").checked && !!trendInfo(), flow: $("useflow").checked && !!flowInfo(), end: wStart(Date.now()) + 900000, result: null });
+persist(); renderLog();
+});
+var cb = $("clear"), ct = null;
+cb.addEventListener("click", function () {
+if (cb.getAttribute("data-armed") === "1") { LOG = []; persist(); renderLog(); cb.removeAttribute("data-armed"); cb.textContent = "Clear log"; clearTimeout(ct); }
+else { cb.setAttribute("data-armed", "1"); cb.textContent = "Tap again to clear"; ct = setTimeout(function () { cb.removeAttribute("data-armed"); cb.textContent = "Clear log"; }, 4000); }
+});
+$("strike").addEventListener("input", function () { strikeEdited = $("strike").value.trim() !== ""; compute(); });
+["yes", "no", "minedge", "manual", "tret", "bank"].forEach(function (id) { $(id).addEventListener("input", compute); });
+$("know").addEventListener("input", function () {
+var v = num("know");
+if (v > 0 && spot !== null) { adj = v - spot; adjAt = Date.now(); }
+else if ($("know").value.trim() === "") adj = 0;
+syncOpen(); updAdj(); compute();
+});
+$("usetrend").addEventListener("change", compute);
+$("useflow").addEventListener("change", compute);
+$("usenews").addEventListener("change", compute);
+$("callsec").value = String(callSec);
+$("callsec").addEventListener("change", function () {
+var v = parseInt(this.value, 10);
+if (TIMES.indexOf(v) < 0) return;
+callSec = v; try { localStorage.setItem("btc15-callsec", String(v)); } catch (e) {}
+renderCall(); renderCheck();
+});
+$("usesound").addEventListener("change", function () {
+if (this.checked) { try { snd = snd || new (window.AudioContext || window.webkitAudioContext)(); if (snd.resume) snd.resume(); beep("NONE"); } catch (e) {} }
+});
+
+setInterval(function () { if (mcp && lastWinSeen !== wStart(Date.now())) { lastWinSeen = wStart(Date.now()); loadWins(); } tickClock(); updAdj(); compute(); makeCall(); renderCall(); settleLog(); settlePreds(); recordPreds(); }, 1000);
+tickClock(); renderLog(); renderCheck(); renderHist(); renderCall(); renderCtx(); compute();
+
+
+// ---- Cloud copy of the calls and past windows (the artifact's own database), so they survive cleared browser data and carry across devices.
+var dbh = null, dbSent = {}, dbTimer = null, dbBusy = false, dbState = "off";
+function dbShow(t) { var el = $("dbstat"); if (el) el.textContent = t; }
+function dbSchedule() { if (!dbh || dbTimer) return; dbTimer = setTimeout(function () { dbTimer = null; dbFlush(); }, 2500); }
+function dbFlush() {
+if (!dbh || dbBusy) { if (dbh) dbSchedule(); return; }
+var jobs = [];
+PRED.slice(-400).forEach(function (e) { var j = JSON.stringify(e), k = "p" + e.end; if (dbSent[k] !== j) jobs.push([dbh.collection("preds").doc(String(e.end)), e, k, j]); });
+WINS.slice(-300).forEach(function (w) { var j = JSON.stringify(w), k = "w" + w.t; if (dbSent[k] !== j) jobs.push([dbh.collection("wins").doc(String(w.t)), w, k, j]); });
+if (!jobs.length) return;
+dbBusy = true;
+(function next(i) {
+if (i >= jobs.length) { dbBusy = false; dbState = "ok"; dbShow("Saved to the cloud. Your calls and past windows are kept even if this browser is cleared."); return; }
+var jb = jobs[i];
+jb[0].set(JSON.parse(jb[3])).then(function () { dbSent[jb[2]] = jb[3]; next(i + 1); }, function (err) {
+dbBusy = false; dbState = "err";
+dbShow("Cloud save failed (" + ((err && err.code) || "error") + "). Calls are still saved in this browser.");
+});
+})(0);
+}
+function dbLoad(db) {
+dbh = db; dbShow("Loading saved calls from the cloud…");
+Promise.all([db.collection("preds").limit(1000).get(), db.collection("wins").limit(1000).get()]).then(function (rs) {
+var byEnd = {};
+PRED.forEach(function (e) { byEnd[e.end] = e; });
+rs[0].docs.forEach(function (d) {
+var r = d.data(); if (!r || !isFinite(r.end)) return;
+dbSent["p" + r.end] = JSON.stringify(r);
+var l = byEnd[r.end];
+if (!l) { var c = JSON.parse(JSON.stringify(r)); PRED.push(c); byEnd[r.end] = c; return; }
+Object.keys(r).forEach(function (k) {
+if (!(k in l)) l[k] = r[k];
+else if (/^c\d+$/.test(k) && l[k] && r[k] && r[k].right !== undefined && l[k].right === undefined) l[k] = r[k];
+});
+});
+PRED.sort(function (a, b) { return a.end - b.end; });
+var have = {}; WINS.forEach(function (w) { have[w.t] = true; });
+rs[1].docs.forEach(function (d) { var r = d.data(); if (!r || !isFinite(r.t)) return; dbSent["w" + r.t] = JSON.stringify(r); if (!have[r.t]) { WINS.push({ t: r.t, o: r.o, c: r.c }); have[r.t] = true; } });
+WINS.sort(function (a, b) { return a.t - b.t; });
+try { localStorage.setItem(PKEY, JSON.stringify(PRED.slice(-400))); localStorage.setItem(WKEY, JSON.stringify(WINS.slice(-300))); } catch (e) {}
+dbState = "ok"; dbShow("Cloud save on. Loaded " + rs[0].size + " saved windows.");
+settlePreds(); renderCall(); renderCheck(); renderHist(); dbFlush();
+}, function (err) { dbh = null; dbShow("Cloud save is not available here (" + ((err && err.code) || "error") + "). Calls are saved in this browser only."); });
+}
+if (window.claude && window.claude.use) window.claude.use("db").then(function (db) { if (db) dbLoad(db); else dbShow("Cloud save is not available in this view. Calls are saved in this browser only."); }, function () { dbShow("Cloud save is not available in this view. Calls are saved in this browser only."); });
+
+
+// ---- Website mode: no connectors. Read Crypto.com and Kalshi straight from the browser.
+var CDC = "https://api.crypto.com/exchange/v1/public/";
+function jget(u) { return fetch(u, { cache: "no-store" }).then(function (r) { if (!r.ok) throw { code: "upstream_error", message: "HTTP " + r.status }; return r.json(); }); }
+function iso(ms) { return new Date(Number(ms)).toISOString(); }
+var directMcp = {
+callTool: function (server, tool, input) {
+var t = String(tool).toLowerCase(), inst = (input && input.instrument_name) || "BTC_USDT";
+if (t === "get_ticker") return jget(CDC + "get-ticker?instrument_name=" + inst).then(function (j) { var d = j.result.data[0]; return { payload: { last: String(d.a) } }; });
+if (t === "get_index_price") return jget(CDC + "get-valuations?instrument_name=BTCUSD-INDEX&valuation_type=index_price&count=1").then(function (j) { var d = j.result.data[0]; return { payload: { instrument_name: "BTCUSD-INDEX", price: String(d.v) } }; });
+if (t === "get_candlestick") return jget(CDC + "get-candlestick?instrument_name=" + inst + "&timeframe=" + (input.timeframe || "1m")).then(function (j) {
+return { payload: { data: j.result.data.map(function (c) { return { open: String(c.o), high: String(c.h), low: String(c.l), close: String(c.c), volume: String(c.v), timestamp: iso(c.t) }; }).reverse() } };
+});
+if (t === "get_book") return jget(CDC + "get-book?instrument_name=" + inst + "&depth=" + (input.depth || 20)).then(function (j) {
+var d = j.result.data[0]; var f = function (a) { return a.map(function (x) { return { price: String(x[0]), qty: String(x[1]) }; }); };
+return { payload: { bids: f(d.bids), asks: f(d.asks) } };
+});
+if (t === "get_trades") return jget(CDC + "get-trades?instrument_name=" + inst + "&count=" + (input.count || 150)).then(function (j) {
+return { payload: { data: j.result.data.map(function (x) { return { price: String(x.p), qty: String(x.q), side: String(x.s).toLowerCase(), timestamp: iso(x.t) }; }) } };
+});
+if (t === "get-global-market") return jget("https://api.coingecko.com/api/v3/global").then(function (j) { var d = j.data; return { payload: { marketCapChangePercentage24hUsd: d.market_cap_change_percentage_24h_usd, btcDominancePct: d.market_cap_percentage.btc, coins: [] } }; });
+return Promise.reject({ code: "tool_error", message: "not available in website mode" });
+}
+};
+var kStrike = false, kalshiTyped = { yes: false, no: false }, kalshiOk = 0;
+["yes", "no"].forEach(function (id) { $(id).addEventListener("input", function () { kalshiTyped[id] = this.value.trim() !== ""; }); });
+function loadKalshi() {
+jget("https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXBTC15M&status=open&limit=10").then(function (j) {
+var now = Date.now(), best = null;
+(j.markets || []).forEach(function (m) { var c = Date.parse(m.close_time); if (c > now && (!best || c < best.c)) best = { c: c, m: m }; });
+if (!best) return;
+var m = best.m, ya = m.yes_ask, na = m.no_ask;
+if (ya == null && m.yes_ask_dollars != null) ya = Math.round(parseFloat(m.yes_ask_dollars) * 100);
+if (na == null && m.no_ask_dollars != null) na = Math.round(parseFloat(m.no_ask_dollars) * 100);
+if (!kalshiTyped.yes && ya > 0) $("yes").value = ya;
+if (!kalshiTyped.no && na > 0) $("no").value = na;
+var k = parseFloat(m.floor_strike != null ? m.floor_strike : m.cap_strike);
+if (isFinite(k) && k > 0 && (!strikeEdited || kStrike)) { $("strike").value = k.toFixed(2); strikeEdited = true; kStrike = true; }
+kalshiOk = Date.now(); $("kstatus").textContent = "Kalshi prices live: " + m.ticker;
+compute();
+}, function () { if (Date.now() - kalshiOk > 30000) $("kstatus").textContent = "Could not reach Kalshi from this browser. Type the prices yourself."; });
+}
+var lastKW = wStart(Date.now());
+setInterval(function () { if (wStart(Date.now()) !== lastKW) { lastKW = wStart(Date.now()); kStrike = false; if (!kalshiTyped.yes) $("yes").value = ""; if (!kalshiTyped.no) $("no").value = ""; } }, 1000);
+var useP = Promise.resolve(directMcp);
+useP.then(function (m) {
+mcp = m;
+if (!mcp) { renderStatus(); tickClock(); return; }
+loadKalshi(); setInterval(loadKalshi, 4000);
+loadCandles(); loadTicker(); loadWins(); loadContext(); setInterval(loadContext, 300000); setTimeout(loadFlow, 1500);
+setInterval(loadTicker, 5000);
+setInterval(loadCandles, 60000);
+setInterval(loadFlow, 10000);
+}, function () { mcp = null; renderStatus(); });
+})();
+</script>
+
+</body></html>
