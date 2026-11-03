@@ -142,6 +142,9 @@ ul.log li{display:grid;grid-template-columns:1fr auto;gap:6px 10px;padding:12px 
 <label for="strike">Price to beat ($). Auto-filled, replace with Kalshi&rsquo;s number</label>
 <input id="strike" inputmode="decimal" placeholder="auto"><p class="note" id="kstatus" style="margin:2px 0 0">Looking for the Kalshi market&hellip;</p>
 </div>
+<div class="field wide"><label for="khelper">Kalshi helper link (optional, makes Kalshi prices automatic)</label>
+<input id="khelper" inputmode="url" placeholder="https://your-name.workers.dev">
+</div>
 <div class="field"><label for="yes">YES ask (%)</label><input id="yes" inputmode="decimal" placeholder="e.g. 62"></div>
 <div class="field"><label for="no">NO ask (%)</label><input id="no" inputmode="decimal" placeholder="e.g. 41"></div>
 <div class="field wide"><label for="callsec">Time of the call, into each 15-minute window</label>
@@ -278,7 +281,7 @@ case "not_granted": case "capability_disabled": case "capability_removed": msg =
 case "blocked_by_policy": msg = "Your organization blocks the Crypto.com connector."; break;
 case "selection_required": msg = "You have more than one Crypto.com connector. Choose one when asked."; break;
 case null: break;
-default: msg = "Could not reach Crypto.com just now. Retrying."; break;
+default: msg = "Could not load live prices just now. Retrying. " + (window.__diag || ""); break;
 }
 var a = $("alert");
 a.hidden = !msg; a.textContent = msg || "";
@@ -1030,8 +1033,14 @@ return Promise.reject({ code: "tool_error", message: "not available in website m
 };
 var kStrike = false, kalshiTyped = { yes: false, no: false }, kalshiOk = 0;
 ["yes", "no"].forEach(function (id) { $(id).addEventListener("input", function () { kalshiTyped[id] = this.value.trim() !== ""; }); });
+function kUrl() {
+var h = ""; try { h = (localStorage.getItem("btc15-khelper") || "").trim(); } catch (e) {}
+return /^https:\/\//.test(h) ? h : "https://kalshi.carson-clance.workers.dev/";
+}
+(function () { var el = $("khelper"); try { el.value = localStorage.getItem("btc15-khelper") || "https://kalshi.carson-clance.workers.dev/"; } catch (e) { el.value = "https://kalshi.carson-clance.workers.dev/"; }
+el.addEventListener("change", function () { try { localStorage.setItem("btc15-khelper", el.value.trim()); } catch (e) {} $("kstatus").textContent = "Checking Kalshi\u2026"; loadKalshi(); }); })();
 function loadKalshi() {
-jget("https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXBTC15M&status=open&limit=10").then(function (j) {
+jget(kUrl()).then(function (j) {
 var now = Date.now(), best = null;
 (j.markets || []).forEach(function (m) { var c = Date.parse(m.close_time); if (c > now && (!best || c < best.c)) best = { c: c, m: m }; });
 if (!best) return;
@@ -1074,10 +1083,12 @@ var directMcp = {
     if (server === "CoinGecko" || !useCb) {
       return cdcTool.callTool(server, tool, input).catch(function (e) {
         if (server === "CoinGecko") throw e;
-        useCb = true; return cbTool.callTool(server, tool, input);
+        window.__dc = "[Crypto.com: " + ((e && (e.message || e.code)) || "failed") + "] "; window.__diag = window.__dc;
+        useCb = true;
+        return cbTool.callTool(server, tool, input).catch(function (e2) { window.__diag = (window.__dc || "") + "[Coinbase: " + ((e2 && (e2.message || e2.code)) || "failed") + "]"; throw e2; });
       });
     }
-    return cbTool.callTool(server, tool, input);
+    return cbTool.callTool(server, tool, input).catch(function (e2) { window.__diag = (window.__dc || "") + "[Coinbase: " + ((e2 && (e2.message || e2.code)) || "failed") + "]"; throw e2; });
   }
 };
 var useP = Promise.resolve(directMcp);
