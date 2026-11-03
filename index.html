@@ -526,7 +526,7 @@ if (!vol || spot === null || openPx === null || openTs !== wStart(Date.now())) r
 if (Date.now() - lastOk > 15000) return;
 var el = Date.now() - openTs, end = openTs + 900000, made = false;
 TIMES.forEach(function (sec) {
-if (el < sec * 1000 || el > sec * 1000 + 25000) return;
+if (el < sec * 1000 || el > sec * 1000 + 90000) return;
 var e = predFor(end);
 if (e && e[ck(sec)]) return;
 if (!e) { e = { end: end, strike: openPx }; PRED.push(e); }
@@ -1100,6 +1100,19 @@ loadCandles(); loadTicker(); loadWins(); loadContext(); setInterval(loadContext,
 setInterval(loadTicker, 5000);
 setInterval(loadCandles, 60000);
 setInterval(loadFlow, 10000);
+    // Background tabs slow down ordinary timers, which can skip a call. A worker's clock keeps ticking at full speed, so it drives the polling and the calls too.
+    try {
+      var tw = new Worker(URL.createObjectURL(new Blob(["var n=0;setInterval(function(){postMessage(++n)},1000)"], { type: "text/javascript" })));
+      tw.onmessage = function (ev) {
+        var n = ev.data;
+        if (n % 5 === 0) loadTicker();
+        if (n % 10 === 0) loadFlow();
+        if (n % 30 === 0) loadCandles();
+        if (typeof loadKalshi === "function" && n % 4 === 0) loadKalshi();
+        tickClock(); compute(); makeCall(); settlePreds(); recordPreds();
+      };
+    } catch (e) {}
+
 }, function () { mcp = null; renderStatus(); });
 })();
 </script>
